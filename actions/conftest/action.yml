@@ -3,6 +3,7 @@ description: Run EdVizion OPA/Conftest policy checks
 
 inputs:
   checks:
+    description: "Define the checks to run"
     required: false
     default: |
       [
