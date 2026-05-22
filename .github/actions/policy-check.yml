@@ -1,0 +1,57 @@
+name: EdVizion Conftest
+description: Run EdVizion OPA/Conftest policy checks
+
+inputs:
+  checks:
+    required: false
+    default: |
+      [
+        {
+          "name": "Terraform Modules",
+          "namespace": "terraform",
+          "files": "./terraform/tfplan.json"
+        },
+        {
+          "name": "Nomad",
+          "namespace": "nomad",
+          "files": "./nomad/*"
+        }
+      ]
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        repository: vizdos-enterprises/edvizion-policy
+        path: .edvizion-policy
+
+    - name: Install Conftest
+      shell: bash
+      run: |
+        VERSION=0.59.0
+        curl -L "https://github.com/open-policy-agent/conftest/releases/download/v${VERSION}/conftest_${VERSION}_Linux_x86_64.tar.gz" | tar xz
+        sudo mv conftest /usr/local/bin/conftest
+
+    - name: Run policy checks
+      shell: bash
+      env:
+        CHECKS: ${{ inputs.checks }}
+      run: |
+        set -euo pipefail
+
+        echo "$CHECKS" | jq -c '.[]' | while read -r check; do
+          name="$(echo "$check" | jq -r '.name')"
+          namespace="$(echo "$check" | jq -r '.namespace')"
+          files="$(echo "$check" | jq -r '.files')"
+
+          echo "::group::Policy check: $name"
+
+          conftest test \
+            -p .edvizion-policy/policy \
+            --namespace "$namespace" \
+            --output github \
+            $files
+
+          echo "::endgroup::"
+        done
