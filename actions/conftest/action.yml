@@ -49,7 +49,7 @@ runs:
           echo "::group::Policy check: $name"
 
           conftest test \
-            -p .edvizion-policy/policy \
+            -p .edvizion-policy \
             --namespace "$namespace" \
             --output github \
             $files
