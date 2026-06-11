@@ -114,6 +114,14 @@ deny contains msg if {
 # Require health checks on every service
 #
 
+is_upstreams_only_connect_service(service) if {
+	service.connect
+	service.connect[0].sidecar_service
+	service.connect[0].sidecar_service[0].proxy
+	service.connect[0].sidecar_service[0].proxy[0].upstreams
+	count(service.connect[0].sidecar_service[0].proxy[0].upstreams) > 0
+}
+
 deny contains msg if {
 	some job_name, jobs in input.job
 	some job in jobs
@@ -123,6 +131,7 @@ deny contains msg if {
 
 	some service in group.service
 
+	not is_upstreams_only_connect_service(service)
 	not service.check
 
 	msg := sprintf(
@@ -140,6 +149,7 @@ deny contains msg if {
 
 	some service in group.service
 
+	not is_upstreams_only_connect_service(service)
 	count(service.check) == 0
 
 	msg := sprintf(
