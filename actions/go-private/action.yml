@@ -1,0 +1,34 @@
+name: Private Go Modules
+description: Configure Git authentication for private Vizdos Enterprises Go modules
+
+runs:
+  using: composite
+
+  steps:
+    - name: Load GitHub App credentials
+      uses: vizdos-enterprises/edvizion-policy/actions/aws-secrets@main
+      with:
+        parameters: |
+          ORG_GO_APP_ID=/github/shared/github_app_id
+          ORG_GO_APP_PRIVATE_KEY=/github/shared/github_app_secret
+
+    - name: Mint GitHub App token
+      id: app-token
+      uses: actions/create-github-app-token@v3
+      with:
+        app-id: ${{ env.ORG_GO_APP_ID }}
+        private-key: ${{ env.ORG_GO_APP_PRIVATE_KEY }}
+        owner: vizdos-enterprises
+
+    - name: Configure private Go modules
+      shell: bash
+      env:
+        TOKEN: ${{ steps.app-token.outputs.token }}
+      run: |
+        set -euo pipefail
+
+        echo "GOPRIVATE=github.com/vizdos-enterprises/*" >> "$GITHUB_ENV"
+
+        git config --global \
+          url."https://x-access-token:${TOKEN}@github.com/vizdos-enterprises/".insteadOf \
+          "https://github.com/vizdos-enterprises/"

@@ -1,0 +1,40 @@
+name: Test Private Go Action
+
+on:
+  push:
+    paths:
+      - "actions/go-private/**"
+      - "actions/aws-secrets/**"
+      - ".github/workflows/test-go-private.yml"
+  pull_request:
+    paths:
+      - "actions/go-private/**"
+      - "actions/aws-secrets/**"
+      - ".github/workflows/test-go-private.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Configure private Go access
+        uses: ./actions/go-private
+
+      - name: Verify private module can be fetched
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir test-module
+          cd test-module
+
+          go mod init github.com/vizdos-enterprises/actions-test
+          go get github.com/vizdos-enterprises/edvizion-consent
