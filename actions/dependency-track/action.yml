@@ -47,6 +47,7 @@ runs:
           mod
           -licenses
           -json
+          -verbose
           -output bom.json
           ./${{ inputs.working-directory }}
 
