@@ -1,0 +1,35 @@
+name: Test DependencyTrack Action
+
+on:
+  workflow_dispatch:
+
+  push:
+    paths:
+      - "actions/dependency-track/**"
+      - "actions/aws-secrets/**"
+      - "test/fixtures/go-sbom/**"
+
+  pull_request:
+    paths:
+      - "actions/dependency-track/**"
+      - "actions/aws-secrets/**"
+      - "test/fixtures/go-sbom/**"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Test DependencyTrack action
+        uses: ./actions/dependency-track
+        with:
+          working-directory: test/fixtures/go-sbom
+          project-name: edvizion-policy-action-test
+          project-version: test

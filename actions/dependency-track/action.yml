@@ -1,0 +1,75 @@
+# actions/dependency-track/action.yml
+
+name: DependencyTrack Go SBOM
+description: Generate a CycloneDX SBOM for a Go project and upload it to DependencyTrack
+
+inputs:
+  working-directory:
+    description: Directory containing go.mod
+    required: false
+    default: "."
+
+  project-name:
+    description: DependencyTrack project name. Defaults to the GitHub repository name.
+    required: false
+    default: ""
+
+  project-version:
+    description: DependencyTrack project version
+    required: false
+    default: "main"
+
+runs:
+  using: composite
+
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+
+    - name: Setup Go
+      uses: actions/setup-go@v6
+      with:
+        go-version-file: ${{ inputs.working-directory }}/go.mod
+
+    - name: Load DependencyTrack credentials
+      uses: vizdos-enterprises/edvizion-policy/actions/aws-secrets@main
+      with:
+        parameters: |
+          DEPENDENCY_TRACK_API_TOKEN=/github/shared/dependency-track/api-token
+          DEPENDENCY_TRACK_HOSTNAME=/github/shared/dependency-track/hostname
+
+    - name: Generate CycloneDX SBOM
+      uses: CycloneDX/gh-gomod-generate-sbom@v2
+      with:
+        version: v1
+        args: >
+          mod
+          -licenses
+          -json
+          -output bom.json
+          ./${{ inputs.working-directory }}
+
+    - name: Determine project name
+      shell: bash
+      env:
+        INPUT_PROJECT_NAME: ${{ inputs.project-name }}
+        REPOSITORY_NAME: ${{ github.event.repository.name }}
+      run: |
+        if [[ -n "$INPUT_PROJECT_NAME" ]]; then
+          echo "DEPENDENCY_TRACK_PROJECT=$INPUT_PROJECT_NAME" >> "$GITHUB_ENV"
+        else
+          echo "DEPENDENCY_TRACK_PROJECT=$REPOSITORY_NAME" >> "$GITHUB_ENV"
+        fi
+
+    - name: Upload SBOM to DependencyTrack
+      uses: DependencyTrack/gh-upload-sbom@v4
+      with:
+        server-hostname: ${{ env.DEPENDENCY_TRACK_HOSTNAME }}
+        api-key: ${{ env.DEPENDENCY_TRACK_API_TOKEN }}
+        project-name: ${{ env.DEPENDENCY_TRACK_PROJECT }}
+        project-version: ${{ inputs.project-version }}
+        bom-filename: bom.json
+        auto-create: true
+        is-latest: true
