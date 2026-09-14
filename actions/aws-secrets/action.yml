@@ -1,0 +1,99 @@
+# actions/aws-secrets/action.yml
+
+name: AWS SSM Secrets
+description: Load AWS SSM parameters into environment variables using GitHub OIDC
+
+inputs:
+  aws-region:
+    description: AWS region containing the SSM parameters
+    required: false
+    default: us-east-1
+
+  parameters:
+    description: |
+      Newline-separated ENV_NAME=/ssm/parameter/path mappings.
+
+      Example:
+        DEPENDENCY_TRACK_API_KEY=/github/shared/dependency-track/api-token
+        DEPENDENCY_TRACK_URL=/github/shared/dependency-track/url
+    required: true
+
+runs:
+  using: composite
+
+  steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v6
+      with:
+        role-to-assume: arn:aws:iam::651706759816:role/github-actions-edvizion-policy
+        aws-region: ${{ inputs.aws-region }}
+
+    - name: Load SSM parameters
+      shell: bash
+      env:
+        PARAMETERS: ${{ inputs.parameters }}
+      run: |
+        set -euo pipefail
+
+        while IFS= read -r line || [[ -n "$line" ]]; do
+          line="$(echo "$line" | xargs)"
+
+          [[ -z "$line" ]] && continue
+          [[ "$line" =~ ^# ]] && continue
+
+          if [[ "$line" != *=* ]]; then
+            echo "::error::Invalid parameter mapping: $line"
+            echo "Expected ENV_NAME=/ssm/parameter/path"
+            exit 1
+          fi
+
+          ENV_NAME="${line%%=*}"
+          PARAMETER_NAME="${line#*=}"
+
+          ENV_NAME="$(echo "$ENV_NAME" | xargs)"
+          PARAMETER_NAME="$(echo "$PARAMETER_NAME" | xargs)"
+
+          if [[ ! "$ENV_NAME" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+            echo "::error::Invalid environment variable name: $ENV_NAME"
+            exit 1
+          fi
+
+          if [[ -z "$PARAMETER_NAME" ]]; then
+            echo "::error::Missing SSM parameter name for $ENV_NAME"
+            exit 1
+          fi
+
+          echo "Loading $PARAMETER_NAME -> $ENV_NAME"
+
+          PARAMETER_JSON="$(
+            aws ssm get-parameter \
+              --name "$PARAMETER_NAME" \
+              --with-decryption \
+              --output json
+          )"
+
+          TYPE="$(
+            printf '%s' "$PARAMETER_JSON" |
+              jq -r '.Parameter.Type'
+          )"
+
+          VALUE="$(
+            printf '%s' "$PARAMETER_JSON" |
+              jq -r '.Parameter.Value'
+          )"
+
+          if [[ "$TYPE" == "SecureString" ]]; then
+            echo "::add-mask::$VALUE"
+          fi
+
+          DELIMITER="SSM_PARAMETER_$(openssl rand -hex 16)"
+
+          {
+            echo "$ENV_NAME<<$DELIMITER"
+            echo "$VALUE"
+            echo "$DELIMITER"
+          } >> "$GITHUB_ENV"
+
+          echo "Loaded $ENV_NAME ($TYPE)"
+
+        done <<< "$PARAMETERS"
