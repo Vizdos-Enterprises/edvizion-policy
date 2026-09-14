@@ -25,7 +25,7 @@ runs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v6
       with:
-        role-to-assume: arn:aws:iam::651706759816:role/github-actions-edvizion-policy
+        role-to-assume: arn:aws:iam::651706759816:role/github-actions-${{ github.event.repository.name }}
         aws-region: ${{ inputs.aws-region }}
 
     - name: Load SSM parameters
