@@ -32,6 +32,7 @@ runs:
       uses: actions/setup-go@v6
       with:
         go-version-file: ${{ inputs.working-directory }}/go.mod
+        cache-dependency-path: ${{ inputs.working-directory }}/go.sum
 
     - name: Load DependencyTrack credentials
       uses: vizdos-enterprises/edvizion-policy/actions/aws-secrets@main
