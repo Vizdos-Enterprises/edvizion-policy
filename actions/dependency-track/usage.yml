@@ -1,0 +1,23 @@
+name: Dependency Track
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+# Demo
+jobs:
+  sbom:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Go Private
+        uses: vizdos-enterprises/edvizion-policy/actions/go-private@main
+
+      - name: Upload to Dependency-Track
+        uses: vizdos-enterprises/edvizion-policy/actions/dependency-track@main
