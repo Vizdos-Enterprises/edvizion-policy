@@ -70,6 +70,7 @@ runs:
         api-key: ${{ env.DEPENDENCY_TRACK_API_TOKEN }}
         project-name: ${{ env.DEPENDENCY_TRACK_PROJECT }}
         project-version: ${{ inputs.project-version }}
+        project-tags: go-packages
         bom-filename: bom.json
         auto-create: true
         is-latest: true
