@@ -1,9 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
-  "enabledManagers": ["gomod"],
+  "enabledManagers": ["gomod", "dockerfile"],
   "env": {
-    "GOPRIVATE": "github.com/Vizdos-Enterprises/*"
+    "GOPRIVATE": "github.com/[Vv]izdos-[Ee]nterprises/*"
   },
   "prHourlyLimit": 0,
   "postUpdateOptions": ["gomodTidy"],
@@ -29,10 +29,29 @@
       "groupName": null
     },
     {
+      "description": "Disable Renovate updates for indirect/transitive dependencies",
+      "matchDepTypes": ["indirect"],
+      "enabled": false
+    },
+    {
       "matchManagers": ["gomod"],
       "matchDepNames": ["go"],
       "matchDepTypes": ["golang"],
       "rangeStrategy": "bump"
+    },
+    {
+      "description": "Wait 7 days before updating external dependencies",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": [
+        "!/^github\\.com\\/(kvizdos|vizdos-enterprises)\\//i"
+      ],
+      "minimumReleaseAge": "7 days"
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchDepNames": ["go"],
+      "matchDepTypes": ["golang"],
+      "minimumReleaseAge": null
     }
   ]
 }
