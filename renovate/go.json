@@ -1,0 +1,38 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["gomod"],
+  "env": {
+    "GOPRIVATE": "github.com/Vizdos-Enterprises/*"
+  },
+  "prHourlyLimit": 0,
+  "postUpdateOptions": ["gomodTidy"],
+  "packageRules": [
+    {
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchPackageNames": [
+        "!/^github\\.com\\/(kvizdos|vizdos-enterprises)\\//i"
+      ],
+      "groupName": "Go minor and patch updates"
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchPackageNames": [
+        "/^github\\.com\\/(kvizdos|vizdos-enterprises)\\//i"
+      ],
+      "groupName": null
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["major"],
+      "groupName": null
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchDepNames": ["go"],
+      "matchDepTypes": ["golang"],
+      "rangeStrategy": "bump"
+    }
+  ]
+}

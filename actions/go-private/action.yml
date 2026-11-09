@@ -1,6 +1,11 @@
 name: Private Go Modules
 description: Configure Git authentication for private Vizdos Enterprises Go modules
 
+outputs:
+  token:
+    description: GitHub App installation token
+    value: ${{ steps.app-token.outputs.token }}
+
 runs:
   using: composite
 
