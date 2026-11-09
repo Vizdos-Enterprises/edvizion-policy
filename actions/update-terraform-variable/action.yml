@@ -1,0 +1,74 @@
+name: Update Terraform Variable
+description: Update a Terraform variable default and open a PR
+
+inputs:
+  tf-path:
+    required: true
+    description: Path to the Terraform file
+  variable:
+    required: true
+    description: Terraform variable name
+  value:
+    required: true
+    description: New default value (string)
+  token:
+    required: true
+    description: GitHub token for creating the PR
+
+runs:
+  using: composite
+  steps:
+    - name: Update Terraform variable
+      shell: bash
+      env:
+        TF_PATH: ${{ inputs.tf-path }}
+        TF_VARIABLE: ${{ inputs.variable }}
+        TF_VALUE: ${{ inputs.value }}
+      run: |
+        python3 - <<'PY'
+        import os
+        import re
+        from pathlib import Path
+
+        path = Path(os.environ["TF_PATH"])
+        variable = re.escape(os.environ["TF_VARIABLE"])
+        value = os.environ["TF_VALUE"]
+
+        content = path.read_text()
+
+        pattern = (
+            rf'(variable\s+"{variable}"\s*\{{'
+            rf'[^}}]*?\bdefault\s*=\s*)("[^"]*")'
+        )
+
+        replacement = lambda m: (
+            m.group(1) + '"' + value + '"'
+        )
+
+        updated, count = re.subn(
+            pattern, replacement, content, count=1,
+            flags=re.DOTALL
+        )
+
+        if count != 1:
+            raise ValueError(f"Variable not found: {variable}")
+
+        path.write_text(updated)
+        PY
+
+    - name: Create Pull Request
+      uses: peter-evans/create-pull-request@v8
+      with:
+        token: ${{ inputs.token }}
+        base: main
+        branch: automation/update-${{ inputs.variable }}
+        add-paths: ${{ inputs.tf-path }}
+        commit-message: "chore: update ${{ inputs.variable }} to ${{ inputs.value }}"
+        title: "chore: update ${{ inputs.variable }} to ${{ inputs.value }}"
+        body: |
+          Automated Terraform variable update.
+
+          File: `${{ inputs.tf-path }}`
+          Variable: `${{ inputs.variable }}`
+          Value: `${{ inputs.value }}`
+        delete-branch: true
