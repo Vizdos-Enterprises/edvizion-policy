@@ -1,25 +1,53 @@
+
 name: Update Terraform Variable
 description: Update a Terraform variable default and open a PR
 
 inputs:
+  repository:
+    required: false
+    description: Target GitHub repository (defaults to current repository)
+    default: ${{ github.repository }}
   tf-path:
     required: true
-    description: Path to the Terraform file
+    description: Path to Terraform file relative to repository root
   variable:
     required: true
     description: Terraform variable name
   value:
     required: true
     description: New default value (string)
-  token:
-    required: true
-    description: GitHub token for creating the PR
 
 runs:
   using: composite
   steps:
+    - name: Load GitHub App credentials
+      uses: vizdos-enterprises/edvizion-policy/actions/aws-secrets@main
+      with:
+        parameters: |
+          ORG_GO_APP_ID=/github/shared/github_app_id
+          ORG_GO_APP_PRIVATE_KEY=/github/shared/github_app_secret
+
+    - name: Mint GitHub App token
+      id: app-token
+      uses: actions/create-github-app-token@v3
+      with:
+        app-id: ${{ env.ORG_GO_APP_ID }}
+        private-key: ${{ env.ORG_GO_APP_PRIVATE_KEY }}
+        owner: vizdos-enterprises
+        permission-contents: write
+        permission-pull-requests: write
+
+    - name: Checkout target repository
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ inputs.repository }}
+        token: ${{ steps.app-token.outputs.token }}
+        path: terraform-target
+        persist-credentials: false
+
     - name: Update Terraform variable
       shell: bash
+      working-directory: terraform-target
       env:
         TF_PATH: ${{ inputs.tf-path }}
         TF_VARIABLE: ${{ inputs.variable }}
@@ -59,7 +87,8 @@ runs:
     - name: Create Pull Request
       uses: peter-evans/create-pull-request@v8
       with:
-        token: ${{ inputs.token }}
+        path: terraform-target
+        token: ${{ steps.app-token.outputs.token }}
         base: main
         branch: automation/update-${{ inputs.variable }}
         add-paths: ${{ inputs.tf-path }}
