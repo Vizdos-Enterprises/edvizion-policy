@@ -1,0 +1,185 @@
+
+name: Semaphore Runner
+description: Trigger a Semaphore UI task using AWS SSM credentials
+
+inputs:
+  project-id:
+    description: Semaphore project ID
+    required: true
+
+  template-id:
+    description: Semaphore task template ID
+    required: true
+
+  variables:
+    description: JSON object of Ansible variables
+    required: false
+    default: "{}"
+
+  message:
+    description: Task execution message
+    required: false
+    default: "Triggered by GitHub Actions"
+
+  wait:
+    description: Wait for task completion
+    required: false
+    default: "true"
+
+  timeout:
+    description: Maximum wait time in seconds
+    required: false
+    default: "900"
+
+  poll-interval:
+    description: Poll interval in seconds
+    required: false
+    default: "10"
+
+outputs:
+  task-id:
+    description: Semaphore task ID
+    value: ${{ steps.run.outputs.task-id }}
+
+  task-url:
+    description: Semaphore task URL
+    value: ${{ steps.run.outputs.task-url }}
+
+  status:
+    description: Final task status, or queued when not waiting
+    value: ${{ steps.run.outputs.status }}
+
+runs:
+  using: composite
+  steps:
+    - name: Load Semaphore credentials
+      uses: vizdos-enterprises/edvizion-policy/actions/aws-secrets@main
+      with:
+        parameters: |
+          SEMAPHORE_API_TOKEN=/github/shared/semaphore/api-token
+          SEMAPHORE_HOSTNAME=/github/shared/semaphore/hostname
+
+    - name: Trigger Semaphore task
+      id: run
+      shell: bash
+      env:
+        PROJECT_ID: ${{ inputs.project-id }}
+        TEMPLATE_ID: ${{ inputs.template-id }}
+        VARIABLES: ${{ inputs.variables }}
+        MESSAGE: ${{ inputs.message }}
+        WAIT: ${{ inputs.wait }}
+        TIMEOUT: ${{ inputs.timeout }}
+        POLL_INTERVAL: ${{ inputs.poll-interval }}
+      run: |
+        set -euo pipefail
+
+        if ! [[ "$PROJECT_ID" =~ ^[1-9][0-9]*$ &&
+                "$TEMPLATE_ID" =~ ^[1-9][0-9]*$ &&
+                "$TIMEOUT" =~ ^[1-9][0-9]*$ &&
+                "$POLL_INTERVAL" =~ ^[1-9][0-9]*$ ]]; then
+          echo "::error::Invalid numeric input"
+          exit 1
+        fi
+
+        if [[ "$WAIT" != "true" && "$WAIT" != "false" ]]; then
+          echo "::error::wait must be true or false"
+          exit 1
+        fi
+
+        jq -e 'type == "object"' <<< "$VARIABLES" > /dev/null
+
+        HOST="${SEMAPHORE_HOSTNAME%/}"
+
+        if [[ "$HOST" != https://* ]]; then
+          echo "::error::Semaphore hostname must be an HTTPS URL"
+          exit 1
+        fi
+
+        API="$HOST/api/project/$PROJECT_ID/tasks"
+
+        PAYLOAD="$(
+          jq -nc \
+            --argjson template_id "$TEMPLATE_ID" \
+            --arg environment "$VARIABLES" \
+            --arg message "$MESSAGE" \
+            '{
+              template_id: $template_id,
+              environment: $environment,
+              message: $message
+            }'
+        )"
+
+        echo "Starting Semaphore template $TEMPLATE_ID"
+
+        RESPONSE="$(
+          curl --fail-with-body -sS \
+            --connect-timeout 10 \
+            --max-time 30 \
+            -X POST "$API" \
+            -H "Authorization: Bearer $SEMAPHORE_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json" \
+            -d "$PAYLOAD"
+        )"
+
+        TASK_ID="$(jq -er '.id' <<< "$RESPONSE")"
+
+        if ! [[ "$TASK_ID" =~ ^[1-9][0-9]*$ ]]; then
+          echo "::error::Invalid task ID"
+          exit 1
+        fi
+
+        TASK_URL="$HOST/project/$PROJECT_ID/history?t=$TASK_ID"
+
+        echo "task-id=$TASK_ID" >> "$GITHUB_OUTPUT"
+        echo "task-url=$TASK_URL" >> "$GITHUB_OUTPUT"
+
+        echo "Task started: $TASK_URL"
+
+        if [[ "$WAIT" == "false" ]]; then
+          echo "status=queued" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        START=$SECONDS
+
+        while (( SECONDS - START < TIMEOUT )); do
+          RESPONSE="$(
+            curl --fail-with-body -sS \
+              --retry 3 \
+              --connect-timeout 10 \
+              --max-time 30 \
+              "$API/$TASK_ID" \
+              -H "Authorization: Bearer $SEMAPHORE_API_TOKEN" \
+              -H "Accept: application/json"
+          )"
+
+          STATUS="$(jq -er '.status' <<< "$RESPONSE")"
+
+          echo "Semaphore task $TASK_ID: $STATUS"
+
+          case "$STATUS" in
+            success)
+              echo "status=success" >> "$GITHUB_OUTPUT"
+              echo "Deployment successful"
+              exit 0
+              ;;
+            error|stopped|rejected)
+              echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+              echo "::error::Semaphore task $TASK_ID: $STATUS"
+              exit 1
+              ;;
+            waiting|starting|running|waiting_confirmation|confirmed|stopping)
+              ;;
+            *)
+              echo "::error::Unknown Semaphore status: $STATUS"
+              exit 1
+              ;;
+          esac
+
+          sleep "$POLL_INTERVAL"
+        done
+
+        echo "status=timeout" >> "$GITHUB_OUTPUT"
+        echo "::error::Semaphore task $TASK_ID timed out"
+        exit 1
