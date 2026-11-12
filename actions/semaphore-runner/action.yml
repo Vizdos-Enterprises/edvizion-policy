@@ -52,12 +52,14 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Load Semaphore credentials
+    - name: Load Semaphore and Cloudflare credentials
       uses: vizdos-enterprises/edvizion-policy/actions/aws-secrets@main
       with:
         parameters: |
           SEMAPHORE_API_TOKEN=/github/shared/semaphore/api-token
           SEMAPHORE_HOSTNAME=/github/shared/semaphore/hostname
+          CF_ACCESS_CLIENT_ID=/github/shared/cloudflare/access-client-id
+          CF_ACCESS_CLIENT_SECRET=/github/shared/cloudflare/access-client-secret
 
     - name: Trigger Semaphore task
       id: run
@@ -117,6 +119,8 @@ runs:
             --max-time 30 \
             -X POST "$API" \
             -H "Authorization: Bearer $SEMAPHORE_API_TOKEN" \
+            -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+            -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
             -H "Content-Type: application/json" \
             -H "Accept: application/json" \
             -d "$PAYLOAD"
@@ -151,6 +155,8 @@ runs:
               --max-time 30 \
               "$API/$TASK_ID" \
               -H "Authorization: Bearer $SEMAPHORE_API_TOKEN" \
+              -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+              -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
               -H "Accept: application/json"
           )"
 
